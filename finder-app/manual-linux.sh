@@ -25,7 +25,7 @@ mkdir -p ${OUTDIR}
 
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/linux-stable" ]; then
-    #Clone only if the repository does not exist.
+    # Clone only if the repository does not exist.
 	echo "CLONING GIT LINUX STABLE VERSION ${KERNEL_VERSION} IN ${OUTDIR}"
 	git clone ${KERNEL_REPO} --depth 1 --single-branch --branch ${KERNEL_VERSION}
 fi
@@ -34,7 +34,7 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     echo "Checking out version ${KERNEL_VERSION}"
     git checkout ${KERNEL_VERSION}
 
-    # kernel build steps
+    # Kernel build steps
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} mrproper
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} defconfig
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} -j$(nproc) all
