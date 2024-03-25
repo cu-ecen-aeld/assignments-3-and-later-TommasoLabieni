@@ -17,13 +17,13 @@ void* threadfunc(void* thread_param)
     struct thread_data *data = (struct thread_data*) thread_param;
 
     /* Wait */
-    usleep(data->wait_to_obtain_ms);
+    usleep(data->wait_to_obtain_ms * 1000);
     
     /* Lock Mutex */
     pthread_mutex_lock(data->lock);
 
     /* Wait */
-    usleep(data->wait_to_release_ms);
+    usleep(data->wait_to_release_ms * 1000);
 
     /* Release Mutex */
     pthread_mutex_unlock(data->lock);
