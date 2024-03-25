@@ -18,5 +18,7 @@ endif
 writer: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS)
 
+all:	writer
+
 clean:
 	rm -f writer *.o
