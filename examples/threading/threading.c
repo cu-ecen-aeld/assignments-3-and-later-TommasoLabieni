@@ -20,14 +20,25 @@ void* threadfunc(void* thread_param)
     usleep(data->wait_to_obtain_ms * 1000);
     
     /* Lock Mutex */
-    pthread_mutex_lock(data->lock);
+    if (pthread_mutex_lock(data->lock) != 0)
+    {
+        perror("Mutex lock error");
+        return data;
+    }
 
     /* Wait */
     usleep(data->wait_to_release_ms * 1000);
 
     /* Release Mutex */
-    pthread_mutex_unlock(data->lock);
+    if (pthread_mutex_unlock(data->lock) != 0)
+    {
+        perror("Mutex unlock error");
+        return data;
+    }
 
+    /**
+     * Set thread routine function success status to true
+    */
     data->thread_complete_success = true;
 
     return data;
