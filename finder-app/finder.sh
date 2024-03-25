@@ -22,7 +22,7 @@ MATCH=0
 for el in `find ${FILESDIR} -type f`
 do
     NUMFILES=$((NUMFILES + 1))
-    if grep ${SEARCHSTR} ${el}
+    if grep ${SEARCHSTR} ${el} -q
     then
         MATCH=$((MATCH + 1))
     fi

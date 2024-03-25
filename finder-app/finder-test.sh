@@ -60,6 +60,9 @@ done
 
 OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
 
+# write output string to tmp file
+echo ${OUTPUTSTRING} > /tmp/assignment4-result.txt
+
 # remove temporary directories
 rm -rf ${WRITEDIR}
 
