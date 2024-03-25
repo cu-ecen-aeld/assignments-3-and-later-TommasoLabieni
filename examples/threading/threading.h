@@ -16,6 +16,21 @@ struct thread_data{
      */
 
     /**
+     * Number of ms to wait before obtaining mutex
+    */
+    int wait_to_obtain_ms;
+
+    /**
+     * Number of ms to wait before releasing mutex
+    */
+    int wait_to_release_ms;
+
+    /**
+     * mutex to use for thread synchronization
+    */
+    pthread_mutex_t* lock;
+
+    /**
      * Set to true if the thread completed with success, false
      * if an error occurred.
      */
