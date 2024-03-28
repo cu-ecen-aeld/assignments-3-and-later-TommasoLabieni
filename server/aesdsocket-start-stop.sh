@@ -9,7 +9,7 @@ fi
 case ${1} in
 "start")
     echo "Running aesdsocket daemon"
-    start-stop-daemon -S -n aesdsocket -a /usr/bin/aesdsocket -d
+    start-stop-daemon -S -n aesdsocket -a /usr/bin/aesdsocket
     ;;
 "stop")
     echo "Stopping aesdsocket daemon"
