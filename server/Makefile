@@ -1,6 +1,6 @@
-CFLAGS=-I. -g
+CFLAGS=-Ilinked_list/ -g -lpthread
 DEPS = ""
-OBJ = aesdsocket.o
+OBJ = aesdsocket.o list.o
 
 ifdef CROSS_COMPILE
 	ifeq ($(CROSS_COMPILE),aarch64-none-linux-gnu-)
