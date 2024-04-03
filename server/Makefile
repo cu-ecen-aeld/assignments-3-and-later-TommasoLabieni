@@ -1,4 +1,4 @@
-CFLAGS=-Ilinked_list/ -g -lpthread
+CFLAGS=-Ilinked_list/ -g -lpthread -lrt
 DEPS = ""
 OBJ = aesdsocket.o list.o
 

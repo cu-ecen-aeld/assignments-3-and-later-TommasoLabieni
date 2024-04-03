@@ -13,9 +13,12 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <pthread.h>
+#include <sys/time.h>
+#include <time.h>
 #include <list.h>
 
 #define LISTEN_BACKLOG 10 /* Max number of pending connections*/
+#define TIMEOUT_SEC 10
 #define OUT_FILENAME "/var/tmp/aesdsocketdata"
 #define BUF_SIZE 128
 
@@ -25,6 +28,8 @@ int sock_fd;
 ssize_t f_length = 0, prev_length = 0;
 pthread_mutex_t mux;
 List l = NULL;
+struct itimerspec ts;
+timer_t timer_tid;
 
 void WaitThread()
 {
@@ -57,6 +62,63 @@ sig_handler_f(int sig_num)
     closelog();
 
     exit(EXIT_SUCCESS);
+}
+
+static void timer_handler_f(union sigval signum)
+{
+    struct timeval cur_time;
+    char tmbuf[64], buf[80];
+
+    if (gettimeofday(&cur_time, NULL) != 0)
+    {
+        syslog(LOG_ERR, "Error getting curime. Errno message is: \n%s\n", strerror(errno));
+        exit(-1);
+    }
+
+    struct tm *nowtm = localtime(&cur_time.tv_sec);
+
+    strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d-%H:%M:%S", nowtm);
+
+    snprintf(buf, sizeof buf, "timestamp:%s\n", tmbuf);
+
+    pthread_mutex_lock(&mux);
+
+    bool last_char = false;
+
+    f_length += strlen(buf);
+    content = realloc(content, f_length + 1); /* Allocating 1 B more for terminating char */
+    if (content == NULL)
+    {
+        pthread_mutex_unlock(&mux);
+        syslog(LOG_ERR, "Error while reallocating new memory. Errno message is: \n%s\n", strerror(errno));
+        exit(-1);
+    }
+
+    for (size_t i = prev_length, j = 0; j < strlen(buf); i++, j++)
+    {
+        content[i] = buf[j];
+        last_char = (buf[j] == '\n');
+    }
+
+    content[f_length] = 0;
+    prev_length = f_length;
+
+    size_t written_chars = write(out_fd, buf, strlen(buf));
+
+    if (written_chars != strlen(buf))
+    {
+        pthread_mutex_unlock(&mux);
+        syslog(LOG_ERR, "Error while writing to file. Errno message is: \n%s\n", strerror(errno));
+        exit(-1);
+    }
+
+    pthread_mutex_unlock(&mux);
+
+    if (timer_settime(timer_tid, 0, &ts, NULL) == -1)
+    {
+        syslog(LOG_ERR, "Error while setting timer. Errno message is: \n%s\n", strerror(errno));
+        exit(-1);
+    }
 }
 
 void *handle_connection(void *arg)
@@ -153,10 +215,10 @@ void execute_server()
 
     memset(&hints, 0, sizeof(struct addrinfo));
 
-    hints.ai_family = AF_INET;      /* Allow IPv4 or IPv6 */
-    hints.ai_socktype = SOCK_DGRAM; /* Datagram socket */
-    hints.ai_flags = AI_PASSIVE;    /* For wildcard IP address */
-    hints.ai_protocol = 0;          /* Any protocol */
+    hints.ai_family = AF_INET;       /* Allow IPv4 or IPv6 */
+    hints.ai_socktype = SOCK_STREAM; /* STREAM socket */
+    hints.ai_flags = AI_PASSIVE;     /* For wildcard IP address */
+    hints.ai_protocol = 0;           /* Any protocol */
     hints.ai_canonname = NULL;
     hints.ai_addr = NULL;
     hints.ai_next = NULL;
@@ -191,6 +253,33 @@ void execute_server()
     if (out_fd == -1)
     {
         syslog(LOG_ERR, "Error while opening out file. Errno message is: \n%s\n", strerror(errno));
+        closelog();
+        close(sock_fd);
+        exit(-1);
+    }
+
+    struct sigevent sev;
+
+    sev.sigev_notify = SIGEV_THREAD;             /* Notify via thread */
+    sev.sigev_notify_function = timer_handler_f; /* Thread start function */
+    sev.sigev_notify_attributes = NULL;
+    sev.sigev_value.sival_ptr = NULL;
+
+    if (timer_create(CLOCK_MONOTONIC, &sev, &timer_tid) == -1)
+    {
+        syslog(LOG_ERR, "Error while creating timer. Errno message is: \n%s\n", strerror(errno));
+        closelog();
+        close(sock_fd);
+        exit(-1);
+    }
+
+    printf("Timer ID: %ld\n", (long)timer_tid);
+    ts.it_value.tv_sec = TIMEOUT_SEC;
+    ts.it_value.tv_nsec = 1e6;
+
+    if (timer_settime(timer_tid, 0, &ts, NULL) == -1)
+    {
+        syslog(LOG_ERR, "Error while setting timer. Errno message is: \n%s\n", strerror(errno));
         closelog();
         close(sock_fd);
         exit(-1);
