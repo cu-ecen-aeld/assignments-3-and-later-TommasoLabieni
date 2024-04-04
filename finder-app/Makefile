@@ -3,11 +3,7 @@ DEPS = ""
 OBJ = writer.o 
 
 ifdef CROSS_COMPILE
-	ifeq ($(CROSS_COMPILE),aarch64-none-linux-gnu-)
-		CC=${CROSS_COMPILE}gcc
-	else
-		CC=gcc
-	endif
+	CC=${CROSS_COMPILE}gcc
 else
 	CC=gcc
 endif
