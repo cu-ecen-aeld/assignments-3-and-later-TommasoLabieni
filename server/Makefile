@@ -1,16 +1,19 @@
-CFLAGS=-Ilinked_list/ -g -lpthread -lrt
-DEPS = ""
+IDIR=-Ilinked_list/
 OBJ = aesdsocket.o list.o
 
 ifdef CROSS_COMPILE
 	CC=${CROSS_COMPILE}gcc
 endif
 
+ifndef LDFLAGS
+	LDFLAGS=-g -lpthread -lrt
+endif
+
 %.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS)
+	$(CC) -c -o $@ $< ${IDIR} $(LDFLAGS)
 
 aesdsocket: $(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS)
+	$(CC) -o $@ $^ ${IDIR} $(LDFLAGS)
 
 all:	aesdsocket
 
