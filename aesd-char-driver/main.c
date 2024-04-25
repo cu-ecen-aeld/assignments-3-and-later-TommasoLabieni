@@ -40,9 +40,7 @@ int aesd_open(struct inode *inode, struct file *filp) {
 
 int aesd_release(struct inode *inode, struct file *filp) {
   PDEBUG("release");
-  /**
-   * TODO: handle release
-   */
+
   return 0;
 }
 
@@ -163,8 +161,16 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         memcpy(new_entry, &(dev->tmp_entry), sizeof(struct aesd_buffer_entry));
 
     /* Reset tmp entry vars for new buf */
-    memset(&(dev->tmp_entry), 0, sizeof(struct aesd_buffer_entry));
+    kfree(dev->tmp_entry.buffptr);
+    dev->tmp_entry.size = 0;
     dev->last_entry_size = 0;
+
+    /* If buffer is full ,free memory of last written element */
+    if (dev->buffer->full) {
+      PDEBUG("Buffer is full. Freeing memory");
+      kfree(dev->buffer->entry[dev->buffer->in_offs].buffptr);
+      dev->buffer->entry[dev->buffer->in_offs].size = 0;
+    }
 
     aesd_circular_buffer_add_entry(dev->buffer, new_entry);
   } else {
@@ -209,10 +215,6 @@ int aesd_init_module(void) {
   }
   memset(&aesd_device, 0, sizeof(struct aesd_dev));
 
-  /**
-   * TODO: initialize the AESD specific portion of the device
-   */
-
   result = aesd_setup_cdev(&aesd_device);
 
   if (result) {
@@ -237,12 +239,19 @@ int aesd_init_module(void) {
 
 void aesd_cleanup_module(void) {
   dev_t devno = MKDEV(aesd_major, aesd_minor);
+  uint8_t index;
+  struct aesd_buffer_entry *entry;
 
   cdev_del(&aesd_device.cdev);
 
-  /**
-   * TODO: cleanup AESD specific poritions here as necessary
-   */
+  /* Free buffer entries */
+  AESD_CIRCULAR_BUFFER_FOREACH(entry, aesd_device.buffer, index) {
+    if (entry->size > 0)
+      kfree(entry->buffptr);
+  }
+
+  /* Free buffer memory */
+  kfree(&aesd_device.buffer);
 
   unregister_chrdev_region(devno, 1);
 }

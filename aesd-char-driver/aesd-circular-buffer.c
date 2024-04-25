@@ -21,6 +21,9 @@ void print_buffer(struct aesd_circular_buffer *buffer) {
   uint8_t i = 0;
 
   for (; i < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++) {
+    if (buffer->entry[i].size == 0)
+      break;
+
     PDEBUG("Idx[%u]: %s", i, buffer->entry[i].buffptr);
   }
 }
@@ -43,7 +46,6 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(
     struct aesd_circular_buffer *buffer, size_t char_offset,
     size_t *entry_offset_byte_rtn) {
   uint8_t idx = buffer->out_offs;
-  print_buffer(buffer);
 
   if (char_offset == 0) {
     *entry_offset_byte_rtn = 0;
