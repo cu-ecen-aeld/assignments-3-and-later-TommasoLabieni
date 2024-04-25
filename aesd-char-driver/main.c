@@ -49,7 +49,7 @@ int aesd_release(struct inode *inode, struct file *filp) {
 ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                   loff_t *f_pos) {
   struct aesd_dev *dev = filp->private_data;
-  ssize_t retval = -1;
+  ssize_t retval = 0;
   size_t cur_off = *f_pos;
   size_t entry_offset_byte_rtn;
   struct aesd_buffer_entry *entry = NULL;
@@ -78,10 +78,9 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 
     cur_off += entry->size - entry_offset_byte_rtn;
     count -= cur_off;
+    *f_pos += entry->size - entry_offset_byte_rtn;
+    retval += entry->size - entry_offset_byte_rtn;
   }
-
-  *f_pos += count;
-  retval = cur_off;
 
 out:
   mutex_unlock(&dev->lock);
