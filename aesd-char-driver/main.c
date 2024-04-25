@@ -56,6 +56,9 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 
   PDEBUG("read %zu bytes with offset %lld", count, *f_pos);
 
+  PDEBUG("****** PRINTING BUFFER ******");
+  print_buffer(dev->buffer);
+
   if (mutex_lock_interruptible(&dev->lock))
     return -ERESTARTSYS;
 
@@ -64,6 +67,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
       dev->buffer, cur_off, &entry_offset_byte_rtn);
 
   if (entry == NULL) {
+    PDEBUG("Null entry! Exiting");
     goto out;
   }
 
@@ -77,11 +81,6 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
   ",
          *f_pos, count, entry->size);
 
-  if (*f_pos >= entry->size)
-    goto out;
-  if (*f_pos + count > entry->size)
-    count = entry->size - *f_pos;
-
   if (count > entry->size)
     count = entry->size;
 
@@ -93,12 +92,10 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
   ",
          *f_pos, count, entry->size);
 
-  if (copy_to_user(buf + retval, entry->buffptr, count)) {
+  if (copy_to_user(buf, entry->buffptr, count)) {
     retval = -EFAULT;
     goto out;
   }
-
-  retval += entry->size - entry_offset_byte_rtn;
 
   *f_pos += count;
   retval = count;
