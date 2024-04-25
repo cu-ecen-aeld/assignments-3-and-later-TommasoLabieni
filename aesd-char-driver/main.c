@@ -211,6 +211,9 @@ static int aesd_setup_cdev(struct aesd_dev *dev) {
 int aesd_init_module(void) {
   dev_t dev = 0;
   int result;
+  uint8_t index;
+  struct aesd_buffer_entry *entry;
+
   result = alloc_chrdev_region(&dev, aesd_minor, 1, "aesdchar");
   aesd_major = MAJOR(dev);
   if (result < 0) {
@@ -231,6 +234,14 @@ int aesd_init_module(void) {
   aesd_device.buffer = kmalloc(sizeof(struct aesd_circular_buffer), GFP_KERNEL);
   if (!aesd_device.buffer)
     return -ERESTARTSYS;
+
+  cdev_del(&aesd_device.cdev);
+
+  /* Init buffer entries */
+  AESD_CIRCULAR_BUFFER_FOREACH(entry, aesd_device.buffer, index) {
+    kfree(entry->size = 0);
+    memset(entry, 0, sizeof(struct aesd_buffer_entry));
+  }
 
   mutex_init(&aesd_device.lock);
 
