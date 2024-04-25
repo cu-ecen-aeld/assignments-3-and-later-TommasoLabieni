@@ -110,33 +110,32 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
   struct aesd_dev *dev = filp->private_data;
   size_t buf_size = count + dev->last_entry_size;
   ssize_t retval = -ENOMEM;
+  struct aesd_buffer_entry *new_entry = NULL;
 
   PDEBUG("write %zu bytes with offset %lld", count, *f_pos);
 
   if (mutex_lock_interruptible(&dev->lock))
     return -ERESTARTSYS;
 
-  if (!dev->entry) {
-    PDEBUG("Allocate mem for new entry");
-    dev->entry = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
-    if (!dev->entry)
-      return -ERESTARTSYS;
+  if (dev->tmp_entry.size == 0) {
+    PDEBUG("Entry not existing");
   } else {
-    PDEBUG("entry should be existing...");
+    PDEBUG("Entry should be existing...");
   }
 
   PDEBUG("Allocating mem for buffptr. Last size is: %lu ; new size is: %lu",
          dev->last_entry_size, buf_size);
 
-  dev->entry->buffptr = krealloc(dev->entry->buffptr, buf_size, GFP_KERNEL);
-  if (!dev->entry->buffptr)
+  dev->tmp_entry.buffptr =
+      krealloc(dev->tmp_entry.buffptr, buf_size, GFP_KERNEL);
+  if (!dev->tmp_entry.buffptr)
     goto out;
-  dev->entry->size = buf_size;
+  dev->tmp_entry.size = buf_size;
 
   PDEBUG("Copying from user");
 
-  if (copy_from_user((void *)(dev->entry->buffptr + dev->last_entry_size), buf,
-                     count)) {
+  if (copy_from_user((void *)(dev->tmp_entry.buffptr + dev->last_entry_size),
+                     buf, count)) {
     retval = -EFAULT;
     goto out;
   }
@@ -148,16 +147,26 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 
   /* Check if terminated with \n char */
   if (buf[count - 1] == '\n') {
-    dev->entry->buffptr =
-        krealloc(dev->entry->buffptr, (buf_size + 1), GFP_KERNEL);
+    dev->tmp_entry.buffptr =
+        krealloc(dev->tmp_entry.buffptr, (buf_size + 1), GFP_KERNEL);
 
-    memset((void *)(dev->entry->buffptr + buf_size), '\0', 1);
+    memset((void *)(dev->tmp_entry.buffptr + buf_size), '\0', 1);
 
     PDEBUG("user buf ended with terminating char. Entry is: %s",
-           dev->entry->buffptr);
-    /* Reset last entry size for new buf */
+           dev->tmp_entry.buffptr);
+
+    new_entry = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
+    if (!new_entry)
+      goto out;
+
+    new_entry =
+        memcpy(new_entry, &(dev->tmp_entry), sizeof(struct aesd_buffer_entry));
+
+    /* Reset tmp entry vars for new buf */
+    memset(&(dev->tmp_entry), 0, sizeof(struct aesd_buffer_entry));
     dev->last_entry_size = 0;
-    aesd_circular_buffer_add_entry(dev->buffer, dev->entry);
+
+    aesd_circular_buffer_add_entry(dev->buffer, new_entry);
   } else {
     PDEBUG("user buf DID NOT ended with terminating char.");
     /* Update last entry size */
@@ -211,6 +220,7 @@ int aesd_init_module(void) {
   }
 
   PDEBUG("Allocating initial memory for buffer");
+
   /* Allocate memory for buffer */
   aesd_device.buffer = kmalloc(sizeof(struct aesd_circular_buffer), GFP_KERNEL);
   if (!aesd_device.buffer)
@@ -219,7 +229,7 @@ int aesd_init_module(void) {
   mutex_init(&aesd_device.lock);
 
   /* Initialize device settings */
-  aesd_device.entry = NULL;
+  memset(&(aesd_device.tmp_entry), 0, sizeof(struct aesd_buffer_entry));
   aesd_device.last_entry_size = 0;
 
   return result;

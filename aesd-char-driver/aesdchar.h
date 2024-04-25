@@ -28,7 +28,7 @@
 #endif
 
 struct aesd_dev {
-  struct aesd_buffer_entry *entry;
+  struct aesd_buffer_entry tmp_entry;
   ssize_t last_entry_size;
   struct aesd_circular_buffer *buffer; /* circular buffer */
   struct mutex lock;                   /* mutual exclusion semaphore     */
