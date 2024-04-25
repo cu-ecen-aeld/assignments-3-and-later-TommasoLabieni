@@ -145,11 +145,6 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 
   /* Check if terminated with \n char */
   if (buf[count - 1] == '\n') {
-    dev->tmp_entry.buffptr =
-        krealloc(dev->tmp_entry.buffptr, (buf_size + 1), GFP_KERNEL);
-
-    memset((void *)(dev->tmp_entry.buffptr + buf_size), '\0', 1);
-
     PDEBUG("user buf ended with terminating char. Entry is: %s",
            dev->tmp_entry.buffptr);
 
@@ -157,12 +152,12 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     new_entry = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
     if (!new_entry)
       goto out;
-    new_entry->buffptr = kmalloc((buf_size + 1), GFP_KERNEL);
+    new_entry->buffptr = kmalloc(buf_size, GFP_KERNEL);
 
     /* Set new entry value */
-    new_entry->buffptr = memcpy((void *)new_entry->buffptr,
-                                dev->tmp_entry.buffptr, (buf_size + 1));
-    new_entry->size = (buf_size + 1);
+    new_entry->buffptr =
+        memcpy((void *)new_entry->buffptr, dev->tmp_entry.buffptr, buf_size);
+    new_entry->size = buf_size;
 
     /* Reset tmp entry vars for new buf */
     kfree(dev->tmp_entry.buffptr);
