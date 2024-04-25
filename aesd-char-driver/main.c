@@ -162,7 +162,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 
     /* Reset tmp entry vars for new buf */
     kfree(dev->tmp_entry.buffptr);
-    dev->tmp_entry.size = 0;
+    memset(&(aesd_device.tmp_entry), 0, sizeof(struct aesd_buffer_entry));
     dev->last_entry_size = 0;
 
     /* If buffer is full ,free memory of last written element */
@@ -251,7 +251,7 @@ void aesd_cleanup_module(void) {
   }
 
   /* Free buffer memory */
-  kfree(&aesd_device.buffer);
+  kfree(aesd_device.buffer);
 
   unregister_chrdev_region(devno, 1);
 }
