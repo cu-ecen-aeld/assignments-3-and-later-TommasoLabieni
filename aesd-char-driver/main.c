@@ -95,7 +95,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
   PDEBUG("Last Operations");
 
   *f_pos += count;
-  retval = buf_size;
+  retval = count;
 
   /* Check if terminated with \n char */
   if (buf[count - 1] == '\n') {
