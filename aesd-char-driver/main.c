@@ -67,18 +67,30 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
   if (mutex_lock_interruptible(&dev->lock))
     return -ERESTARTSYS;
 
+  if (!dev->entry) {
+    PDEBUG("Allocate mem for new entry");
+    dev->entry = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
+  } else {
+    PDEBUG("entry should be existing...");
+  }
+
+  PDEBUG("Allocating mem for buffptr. Last size is: %lu ; new size is: %lu",
+         dev->last_entry_size, buf_size);
+
   dev->entry->buffptr = krealloc(dev->entry->buffptr, buf_size, GFP_KERNEL);
   if (!dev->entry->buffptr)
     goto out;
   dev->entry->size = buf_size;
 
-  PDEBUG("Size set");
+  PDEBUG("Copying from user");
 
   if (copy_from_user((void *)(dev->entry->buffptr + dev->last_entry_size), buf,
                      count)) {
     retval = -EFAULT;
     goto out;
   }
+
+  PDEBUG("Last Operations");
 
   *f_pos += count;
   retval = buf_size;
