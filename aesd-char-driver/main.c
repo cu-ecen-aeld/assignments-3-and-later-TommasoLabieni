@@ -70,6 +70,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
   if (!dev->entry) {
     PDEBUG("Allocate mem for new entry");
     dev->entry = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
+    if (!dev->entry)
+      return -ERESTARTSYS;
   } else {
     PDEBUG("entry should be existing...");
   }
@@ -153,12 +155,17 @@ int aesd_init_module(void) {
     unregister_chrdev_region(dev, 1);
   }
 
+  PDEBUG("Allocating initial memory for buffer");
+  /* Allocate memory for buffer */
+  aesd_device.buffer = kmalloc(sizeof(struct aesd_circular_buffer), GFP_KERNEL);
+  if (!aesd_device.buffer)
+    return -ERESTARTSYS;
+
   mutex_init(&aesd_device.lock);
 
   /* Initialize device settings */
   aesd_device.entry = NULL;
   aesd_device.last_entry_size = 0;
-  aesd_device.buffer = NULL;
 
   return result;
 }
