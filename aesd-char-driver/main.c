@@ -239,7 +239,7 @@ int aesd_init_module(void) {
 
   /* Init buffer entries */
   AESD_CIRCULAR_BUFFER_FOREACH(entry, aesd_device.buffer, index) {
-    kfree(entry->size = 0);
+    entry->size = 0;
     memset(entry, 0, sizeof(struct aesd_buffer_entry));
   }
 
