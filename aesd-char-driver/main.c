@@ -50,6 +50,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                   loff_t *f_pos) {
   struct aesd_dev *dev = filp->private_data;
   ssize_t retval = 0;
+  size_t cur_off = *f_pos;
   size_t entry_offset_byte_rtn;
   struct aesd_buffer_entry *entry = NULL;
 
@@ -58,28 +59,49 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
   if (mutex_lock_interruptible(&dev->lock))
     return -ERESTARTSYS;
 
-  while (count) {
-    PDEBUG("Searching for entry with cur_off = %lu", retval);
-    entry = aesd_circular_buffer_find_entry_offset_for_fpos(
-        dev->buffer, retval, &entry_offset_byte_rtn);
+  PDEBUG("Searching for entry with cur_off = %lu", cur_off);
+  entry = aesd_circular_buffer_find_entry_offset_for_fpos(
+      dev->buffer, cur_off, &entry_offset_byte_rtn);
 
-    if (entry == NULL)
-      break;
-
-    PDEBUG("Found entry %s with entry_offset = %lu", entry->buffptr,
-           entry_offset_byte_rtn);
-
-    if (copy_to_user(buf + retval, (entry->buffptr + entry_offset_byte_rtn),
-                     entry->size - entry_offset_byte_rtn)) {
-      retval = -EFAULT;
-      goto out;
-    }
-
-    retval += entry->size - entry_offset_byte_rtn;
-
-    *f_pos += retval;
-    count -= retval;
+  if (entry == NULL) {
+    goto out;
   }
+
+  PDEBUG("Found entry %s with entry_offset = %lu", entry->buffptr,
+         entry_offset_byte_rtn);
+
+  PDEBUG(" \
+  f_pos: %llu \n \
+  count: %lu \n \
+  entry->size: %lu \
+  ",
+         *f_pos, count, entry->size);
+
+  if (*f_pos >= entry->size)
+    goto out;
+  if (*f_pos + count > entry->size)
+    count = entry->size - *f_pos;
+
+  if (count > entry->size)
+    count = entry->size;
+
+  PDEBUG(" \
+  CHANGED \n \
+  f_pos: %llu \n \
+  count: %lu \n \
+  entry->size: %lu \
+  ",
+         *f_pos, count, entry->size);
+
+  if (copy_to_user(buf + retval, entry->buffptr, count)) {
+    retval = -EFAULT;
+    goto out;
+  }
+
+  retval += entry->size - entry_offset_byte_rtn;
+
+  *f_pos += count;
+  retval = count;
 
 out:
   mutex_unlock(&dev->lock);
