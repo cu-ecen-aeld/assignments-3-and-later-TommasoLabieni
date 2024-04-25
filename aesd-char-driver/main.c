@@ -99,6 +99,11 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 
   /* Check if terminated with \n char */
   if (buf[count - 1] == '\n') {
+    dev->entry->buffptr =
+        krealloc(dev->entry->buffptr, (buf_size + 1), GFP_KERNEL);
+
+    memset((void *)(dev->entry->buffptr + buf_size), '\0', 1);
+
     PDEBUG("user buf ended with terminating char. Entry is: %s",
            dev->entry->buffptr);
     /* Reset last entry size for new buf */
