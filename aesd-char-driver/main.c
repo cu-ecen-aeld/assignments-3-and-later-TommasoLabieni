@@ -48,19 +48,51 @@ int aesd_release(struct inode *inode, struct file *filp) {
 
 ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                   loff_t *f_pos) {
-  ssize_t retval = 0;
+  struct aesd_dev *dev = filp->private_data;
+  ssize_t retval = -1;
+  size_t cur_off = *f_pos;
+  size_t entry_offset_byte_rtn;
+  struct aesd_buffer_entry *entry = NULL;
+
   PDEBUG("read %zu bytes with offset %lld", count, *f_pos);
-  /**
-   * TODO: handle read
-   */
+
+  if (mutex_lock_interruptible(&dev->lock))
+    return -ERESTARTSYS;
+
+  while (count) {
+    PDEBUG("Searching for entry with cur_off = %lu", cur_off);
+    entry = aesd_circular_buffer_find_entry_offset_for_fpos(
+        dev->buffer, cur_off, &entry_offset_byte_rtn);
+
+    if (entry == NULL)
+      break;
+
+    PDEBUG("Found entry %s with entry_offset = %lu", entry->buffptr,
+           entry_offset_byte_rtn);
+
+    if (copy_to_user(buf + cur_off, (entry->buffptr + entry_offset_byte_rtn),
+                     entry->size - entry_offset_byte_rtn)) {
+      retval = -EFAULT;
+      goto out;
+    }
+
+    cur_off += entry->size - entry_offset_byte_rtn;
+    count -= cur_off;
+  }
+
+  *f_pos += count;
+  retval = cur_off;
+
+out:
+  mutex_unlock(&dev->lock);
   return retval;
 }
 
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
                    loff_t *f_pos) {
-  ssize_t retval = -ENOMEM;
   struct aesd_dev *dev = filp->private_data;
   size_t buf_size = count + dev->last_entry_size;
+  ssize_t retval = -ENOMEM;
 
   PDEBUG("write %zu bytes with offset %lld", count, *f_pos);
 
