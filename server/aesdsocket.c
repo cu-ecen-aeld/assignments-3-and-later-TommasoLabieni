@@ -244,6 +244,8 @@ void execute_server() {
     exit(-1);
   }
 
+  syslog(LOG_DEBUG, "Opened file %s\n", OUT_FILENAME);
+
   out_fd = open(OUT_FILENAME, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (out_fd == -1) {
     syslog(LOG_ERR, "Error while opening out file. Errno message is: \n%s\n",
