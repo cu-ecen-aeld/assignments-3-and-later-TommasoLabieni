@@ -50,7 +50,6 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                   loff_t *f_pos) {
   struct aesd_dev *dev = filp->private_data;
   ssize_t retval = 0;
-  size_t cur_off = *f_pos;
   size_t entry_offset_byte_rtn;
   struct aesd_buffer_entry *entry = NULL;
 
@@ -60,9 +59,9 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     return -ERESTARTSYS;
 
   while (count) {
-    PDEBUG("Searching for entry with cur_off = %lu", cur_off);
+    PDEBUG("Searching for entry with cur_off = %lu", retval);
     entry = aesd_circular_buffer_find_entry_offset_for_fpos(
-        dev->buffer, cur_off, &entry_offset_byte_rtn);
+        dev->buffer, retval, &entry_offset_byte_rtn);
 
     if (entry == NULL)
       break;
@@ -70,16 +69,16 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     PDEBUG("Found entry %s with entry_offset = %lu", entry->buffptr,
            entry_offset_byte_rtn);
 
-    if (copy_to_user(buf + cur_off, (entry->buffptr + entry_offset_byte_rtn),
+    if (copy_to_user(buf + retval, (entry->buffptr + entry_offset_byte_rtn),
                      entry->size - entry_offset_byte_rtn)) {
       retval = -EFAULT;
       goto out;
     }
 
-    cur_off += entry->size - entry_offset_byte_rtn;
-    count -= cur_off;
-    *f_pos += entry->size - entry_offset_byte_rtn;
     retval += entry->size - entry_offset_byte_rtn;
+
+    *f_pos += retval;
+    count -= retval;
   }
 
 out:
