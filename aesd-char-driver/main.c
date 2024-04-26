@@ -44,6 +44,34 @@ int aesd_release(struct inode *inode, struct file *filp) {
   return 0;
 }
 
+loff_t aesd_llseek(struct file *filp, loff_t off, int whence) {
+  struct aesd_dev *dev = filp->private_data;
+  loff_t newpos;
+
+  switch (whence) {
+  case 0: /* SEEK_SET */
+    newpos = off;
+    break;
+
+  case 1: /* SEEK_CUR */
+    newpos = filp->f_pos + off;
+    break;
+
+  case 2: /* SEEK_END */
+    newpos = dev->size + off;
+    break;
+
+  default: /* can't happen */
+    return -EINVAL;
+  }
+
+  if (newpos < 0)
+    return -EINVAL;
+
+  filp->f_pos = newpos;
+  return newpos;
+}
+
 ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                   loff_t *f_pos) {
   struct aesd_dev *dev = filp->private_data;
@@ -90,7 +118,8 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
   ",
          *f_pos, count, entry->size);
 
-  if (copy_to_user(buf, entry->buffptr, count)) {
+  if (copy_to_user(buf, entry->buffptr + entry_offset_byte_rtn, count)) {
+    PDEBUG("Something went wrong...");
     retval = -EFAULT;
     goto out;
   }
@@ -159,6 +188,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         memcpy((void *)new_entry->buffptr, dev->tmp_entry.buffptr, buf_size);
     new_entry->size = buf_size;
 
+    dev->size += new_entry->size;
+
     /* Reset tmp entry vars for new buf */
     kfree(dev->tmp_entry.buffptr);
     memset(&(aesd_device.tmp_entry), 0, sizeof(struct aesd_buffer_entry));
@@ -167,6 +198,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     /* If buffer is full ,free memory of last written element */
     if (dev->buffer->full) {
       PDEBUG("Buffer is full. Freeing memory");
+      dev->size -= dev->buffer->entry[dev->buffer->in_offs].size;
       kfree(dev->buffer->entry[dev->buffer->in_offs].buffptr);
       dev->buffer->entry[dev->buffer->in_offs].size = 0;
     }
@@ -184,9 +216,10 @@ out:
 }
 struct file_operations aesd_fops = {
     .owner = THIS_MODULE,
+    .open = aesd_open,
+    .llseek = aesd_llseek,
     .read = aesd_read,
     .write = aesd_write,
-    .open = aesd_open,
     .release = aesd_release,
 };
 
@@ -239,6 +272,7 @@ int aesd_init_module(void) {
   /* Initialize device settings */
   memset(&(aesd_device.tmp_entry), 0, sizeof(struct aesd_buffer_entry));
   aesd_device.last_entry_size = 0;
+  aesd_device.size = 0;
 
   return result;
 }
