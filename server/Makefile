@@ -19,3 +19,4 @@ all:	aesdsocket
 
 clean:
 	rm -f aesdsocket *.o
+
