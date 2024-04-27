@@ -246,22 +246,25 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
     }
 
     while (param.write_cmd) {
-      PDEBUG("Iter: %lu", i)
+      PDEBUG("Iter: %lu", i);
       entry = aesd_circular_buffer_find_entry_offset_for_fpos(
           dev->buffer, cur_off, &entry_offset_byte_rtn);
       if (entry == NULL) {
-        PDEBUG("No more entries available!!!", i);
+        PDEBUG("No more entries available!!!");
         retval = -EINVAL;
         goto out;
       }
-      PDEBUG("Entry is: %s", i, entry->buffptr);
+      PDEBUG("Entry is: %s", entry->buffptr);
       --param.write_cmd;
       ++i;
       cur_off += entry->size;
     }
 
-    PDEBUG("Seek finished. entry is: %s (to be added the B offset!)",
-           entry->buffptr);
+    if (entry)
+      PDEBUG("Seek finished. entry is: %s (to be added the B offset!)",
+             entry->buffptr);
+
+    break;
 
   default: /* redundant, as cmd was checked against MAXNR */
     retval = -ENOTTY;
