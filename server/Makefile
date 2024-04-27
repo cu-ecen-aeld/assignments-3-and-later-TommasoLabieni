@@ -1,6 +1,7 @@
 IDIR=-Ilinked_list/
 OBJ = aesdsocket.o list.o
 
+
 ifdef CROSS_COMPILE
 	CC=${CROSS_COMPILE}gcc
 endif
@@ -9,14 +10,19 @@ ifndef LDFLAGS
 	LDFLAGS=-g -lpthread -lrt
 endif
 
+all:	aesdsocket test_ioctl
+
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< ${IDIR} $(LDFLAGS)
+
+test_ioctl: test_ioctl.c
+	$(CC) -o $@ $^ $(LDFLAGS)
 
 aesdsocket: $(OBJ)
 	$(CC) -o $@ $^ ${IDIR} $(LDFLAGS)
 
-all:	aesdsocket
+
 
 clean:
-	rm -f aesdsocket *.o
+	rm -f aesdsocket test_ioctl *.o
 
