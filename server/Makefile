@@ -1,4 +1,4 @@
-IDIR=-Ilinked_list/
+IDIR=-Ilinked_list/ -I../aesd-char-driver
 OBJ = aesdsocket.o list.o
 
 

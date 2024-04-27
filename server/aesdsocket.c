@@ -1,3 +1,4 @@
+#include <aesd_ioctl.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -35,6 +36,8 @@ pthread_mutex_t mux;
 List l = NULL;
 struct itimerspec ts;
 timer_t timer_tid;
+char ioctl_str[128];
+struct aesd_seekto ioctl_params;
 
 void WaitThread() {
   ListNode *tmp = l;
@@ -153,24 +156,36 @@ void *handle_connection(void *arg) {
       content[f_length] = 0;
       prev_length = f_length;
 
-      size_t written_chars = write(out_fd, buf, nread);
-
-      if (written_chars != nread) {
-        pthread_mutex_unlock(&mux);
-        syslog(LOG_ERR, "Error while writing to file. Errno message is: \n%s\n",
-               strerror(errno));
-        exit(-1);
-      }
-
       /* Return full content to client */
       if (last_char) {
-        if (send(t_data->cfd, content, f_length, 0) != f_length) {
-          pthread_mutex_unlock(&mux);
-          syslog(LOG_ERR,
-                 "Error while writing back to socket. Errno message is: \n%s\n",
-                 strerror(errno));
-          exit(-1);
+        if ((sscanf(buf, "AESDCHAR_IOCSEEKTO:%u,%u\n", &ioctl_params.write_cmd,
+                    &ioctl_params.write_cmd_offset)) == 2) {
+          /* If here, IOCTL Command*/
+          int ret = ioctl(out_fd, AESDCHAR_IOCSEEKTO, &ioctl_params);
+          if (ret != 0) {
+            syslog(LOG_DEBUG, "IOCTL Error returned: %d\n", ret);
+          }
+        } else {
+          size_t written_chars = write(out_fd, buf, nread);
+
+          if (written_chars != nread) {
+            pthread_mutex_unlock(&mux);
+            syslog(LOG_ERR,
+                   "Error while writing to file. Errno message is: \n%s\n",
+                   strerror(errno));
+            exit(-1);
+          }
+
+          if (send(t_data->cfd, content, f_length, 0) != f_length) {
+            pthread_mutex_unlock(&mux);
+            syslog(
+                LOG_ERR,
+                "Error while writing back to socket. Errno message is: \n%s\n",
+                strerror(errno));
+            exit(-1);
+          }
         }
+
         pthread_mutex_unlock(&mux);
       }
 
