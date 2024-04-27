@@ -221,6 +221,8 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
   // struct scull_dev *dev = filp->private_data;
   struct aesd_seekto param = *(struct aesd_seekto *)arg;
 
+  PDEBUG("cmd: %u - cmd_off: %u", param.write_cmd, param.write_cmd_offset);
+
   /*
    * extract the type and number bitfields, and don't decode
    * wrong cmds: return ENOTTY (inappropriate ioctl) before access_ok()
@@ -229,6 +231,9 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
     return -ENOTTY;
   if (_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)
     return -ENOTTY;
+
+  PDEBUG("Checking cmd. It is: %u, and expected is: %u", cmd,
+         AESDCHAR_IOCSEEKTO);
 
   switch (cmd) {
 
