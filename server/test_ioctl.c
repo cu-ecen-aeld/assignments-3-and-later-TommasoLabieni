@@ -22,16 +22,23 @@ struct aesd_seekto {
 
 struct aesd_seekto out;
 
-int main(void) {
-  out.write_cmd = 0;
-  out.write_cmd_offset = 0;
+int main(int argc, char *argv[]) {
+  if (argc == 3) {
+    out.write_cmd = atoi(argv[1]);
+    out.write_cmd_offset = atoi(argv[2]);
+  } else {
+    out.write_cmd = 0;
+    out.write_cmd_offset = 0;
+  }
+  printf("Test ioctl with write_cmd = %u and write_cmd_offset = %u\n",
+         out.write_cmd, out.write_cmd_offset);
+
   printf("Opening file\n");
   int fd = open("/dev/aesdchar", O_WRONLY);
   if (fd == -1) {
     perror("Cannot open file");
     exit(1);
   }
-  printf("Test ioctl\n");
 
   int ret = ioctl(fd, AESDCHAR_IOCSEEKTO, &out);
   printf("ioctl returned: %d\n", ret);
