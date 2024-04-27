@@ -214,12 +214,41 @@ out:
   mutex_unlock(&dev->lock);
   return retval;
 }
+
+long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
+
+  int retval = 0;
+  // struct scull_dev *dev = filp->private_data;
+  struct aesd_seekto param = *(struct aesd_seekto *)arg;
+
+  /*
+   * extract the type and number bitfields, and don't decode
+   * wrong cmds: return ENOTTY (inappropriate ioctl) before access_ok()
+   */
+  if (_IOC_TYPE(cmd) != AESD_IOC_MAGIC)
+    return -ENOTTY;
+  if (_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)
+    return -ENOTTY;
+
+  switch (cmd) {
+
+  case AESDCHAR_IOCSEEKTO:
+    PDEBUG("cmd: %u - cmd_off: %u", param.write_cmd, param.write_cmd_offset);
+    break;
+
+  default: /* redundant, as cmd was checked against MAXNR */
+    return -ENOTTY;
+  }
+  return retval;
+}
+
 struct file_operations aesd_fops = {
     .owner = THIS_MODULE,
     .open = aesd_open,
     .llseek = aesd_llseek,
     .read = aesd_read,
     .write = aesd_write,
+    .unlocked_ioctl = aesd_ioctl,
     .release = aesd_release,
 };
 

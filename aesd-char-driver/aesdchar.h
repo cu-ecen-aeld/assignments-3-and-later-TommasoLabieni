@@ -9,6 +9,7 @@
 #define AESD_CHAR_DRIVER_AESDCHAR_H_
 
 #include "aesd-circular-buffer.h"
+#include "aesd_ioctl.h"
 #include <linux/cdev.h>
 #include <linux/mutex.h>
 
