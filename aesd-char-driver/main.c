@@ -221,7 +221,9 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
   struct aesd_dev *dev = filp->private_data;
   struct aesd_seekto param = *(struct aesd_seekto *)arg;
   size_t cur_off = 0, entry_offset_byte_rtn = 0, i = 0;
-  struct aesd_buffer_entry *entry = NULL;
+  struct aesd_buffer_entry *entry =
+      aesd_circular_buffer_find_entry_offset_for_fpos(dev->buffer, cur_off,
+                                                      &entry_offset_byte_rtn);
 
   PDEBUG("cmd: %u - cmd_off: %u", param.write_cmd, param.write_cmd_offset);
 
@@ -245,7 +247,7 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
       goto out;
     }
 
-    while (param.write_cmd) {
+    while (param.write_cmd && entry) {
       PDEBUG("Iter: %lu", i);
       entry = aesd_circular_buffer_find_entry_offset_for_fpos(
           dev->buffer, cur_off, &entry_offset_byte_rtn);
@@ -260,9 +262,17 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
       cur_off += entry->size;
     }
 
-    if (entry)
-      PDEBUG("Seek finished. entry is: %s (to be added the B offset!)",
-             entry->buffptr);
+    if (entry) {
+      if (param.write_cmd_offset > entry->size) {
+        PDEBUG("offset bigger than entry size!!!");
+        retval = -EINVAL;
+        goto out;
+      }
+
+      PDEBUG("Setting offset to: %lu", (cur_off + param.write_cmd_offset));
+
+      filp->f_pos = cur_off + param.write_cmd_offset;
+    }
 
     break;
 
