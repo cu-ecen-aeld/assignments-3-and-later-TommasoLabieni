@@ -15,7 +15,10 @@ all:	aesdsocket test_ioctl
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< ${IDIR} $(LDFLAGS)
 
-test_ioctl: test_ioctl.c
+test_ioctl.o: test_ioctl.c 
+	$(CC) -c -o $@ $< ${IDIR} $(LDFLAGS)
+
+test_ioctl: test_ioctl.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 aesdsocket: $(OBJ)
