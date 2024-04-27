@@ -218,8 +218,10 @@ out:
 long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
 
   int retval = 0;
-  // struct scull_dev *dev = filp->private_data;
+  struct aesd_dev *dev = filp->private_data;
   struct aesd_seekto param = *(struct aesd_seekto *)arg;
+  size_t cur_off = 0, entry_offset_byte_rtn = 0, i = 0;
+  struct aesd_buffer_entry *entry = NULL;
 
   PDEBUG("cmd: %u - cmd_off: %u", param.write_cmd, param.write_cmd_offset);
 
@@ -232,18 +234,36 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
   if (_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)
     return -ENOTTY;
 
-  PDEBUG("Checking cmd. It is: %u, and expected is: %u", cmd,
+  PDEBUG("Checking cmd. It is: %u, and expected is: %lu", cmd,
          AESDCHAR_IOCSEEKTO);
 
   switch (cmd) {
 
   case AESDCHAR_IOCSEEKTO:
-    PDEBUG("cmd: %u - cmd_off: %u", param.write_cmd, param.write_cmd_offset);
+    if (mutex_lock_interruptible(&(dev->lock))) {
+      retval = -ERESTARTSYS;
+      goto out;
+    }
+
+    while (param.write_cmd) {
+      entry = aesd_circular_buffer_find_entry_offset_for_fpos(
+          dev->buffer, cur_off, &entry_offset_byte_rtn);
+      if (entry == NULL) {
+        PDEBUG("Iter: %lu -> No more entries available!!!", i);
+      }
+      PDEBUG("Iter: %lu Entry is: %s", i, entry->buffptr);
+      --param.write_cmd;
+      ++i;
+      cur_off += entry->size;
+    }
     break;
 
   default: /* redundant, as cmd was checked against MAXNR */
-    return -ENOTTY;
+    retval = -ENOTTY;
+    goto out;
   }
+out:
+  mutex_unlock(&dev->lock);
   return retval;
 }
 
