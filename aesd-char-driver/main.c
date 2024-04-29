@@ -89,43 +89,47 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     return -ERESTARTSYS;
 
   PDEBUG("Searching for entry with cur_off = %lu", cur_off);
-  entry = aesd_circular_buffer_find_entry_offset_for_fpos(
-      dev->buffer, cur_off, &entry_offset_byte_rtn);
 
-  if (entry == NULL) {
-    PDEBUG("Null entry! Exiting");
-    goto out;
-  }
+  while (true) {
+    entry = aesd_circular_buffer_find_entry_offset_for_fpos(
+        dev->buffer, cur_off, &entry_offset_byte_rtn);
 
-  PDEBUG("Found entry %s with entry_offset = %lu", entry->buffptr,
-         entry_offset_byte_rtn);
+    if (entry == NULL) {
+      PDEBUG("Null entry! Exiting");
+      goto out;
+    }
 
-  PDEBUG(" \
+    PDEBUG("Found entry %s with entry_offset = %lu", entry->buffptr,
+           entry_offset_byte_rtn);
+
+    PDEBUG(" \
   f_pos: %llu \n \
   count: %lu \n \
   entry->size: %lu \
   ",
-         *f_pos, count, entry->size);
+           *f_pos, count, entry->size);
 
-  if (count > entry->size)
-    count = entry->size;
+    if (count > entry->size)
+      count = entry->size;
 
-  PDEBUG(" \
+    PDEBUG(" \
   CHANGED \n \
   f_pos: %llu \n \
   count: %lu \n \
   entry->size: %lu \
   ",
-         *f_pos, count, entry->size);
+           *f_pos, count, entry->size);
 
-  if (copy_to_user(buf, entry->buffptr + entry_offset_byte_rtn, count)) {
-    PDEBUG("Something went wrong...");
-    retval = -EFAULT;
-    goto out;
+    if (copy_to_user(buf, entry->buffptr + entry_offset_byte_rtn, count)) {
+      PDEBUG("Something went wrong...");
+      retval = -EFAULT;
+      goto out;
+    }
+
+    *f_pos += count;
+    retval += count;
+    cur_off += count;
   }
-
-  *f_pos += count;
-  retval = count;
 
 out:
   mutex_unlock(&dev->lock);
@@ -262,24 +266,25 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
       cur_off += entry->size;
     }
 
-    if (entry) {
-      if (param.write_cmd_offset > entry->size) {
-        PDEBUG("offset bigger than entry size!!!");
-        retval = -EINVAL;
-        goto out;
-      }
-
-      PDEBUG("Setting offset to: %lu", (cur_off + param.write_cmd_offset));
-
-      filp->f_pos = cur_off + param.write_cmd_offset;
-    }
-
     break;
 
   default: /* redundant, as cmd was checked against MAXNR */
     retval = -ENOTTY;
     goto out;
   }
+
+  if (entry) {
+    if (param.write_cmd_offset > entry->size) {
+      PDEBUG("offset bigger than entry size!!!");
+      retval = -EINVAL;
+      goto out;
+    }
+
+    PDEBUG("Setting offset to: %lu", (cur_off + param.write_cmd_offset));
+
+    filp->f_pos = cur_off + param.write_cmd_offset;
+  }
+
 out:
   mutex_unlock(&dev->lock);
   return retval;
