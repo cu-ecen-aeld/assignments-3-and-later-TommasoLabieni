@@ -44,6 +44,34 @@ int aesd_release(struct inode *inode, struct file *filp) {
   return 0;
 }
 
+loff_t aesd_llseek(struct file *filp, loff_t off, int whence) {
+  struct aesd_dev *dev = filp->private_data;
+  loff_t newpos;
+
+  switch (whence) {
+  case 0: /* SEEK_SET */
+    newpos = off;
+    break;
+
+  case 1: /* SEEK_CUR */
+    newpos = filp->f_pos + off;
+    break;
+
+  case 2: /* SEEK_END */
+    newpos = dev->size + off;
+    break;
+
+  default: /* can't happen */
+    return -EINVAL;
+  }
+
+  if (newpos < 0)
+    return -EINVAL;
+
+  filp->f_pos = newpos;
+  return newpos;
+}
+
 ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                   loff_t *f_pos) {
   struct aesd_dev *dev = filp->private_data;
@@ -61,42 +89,47 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     return -ERESTARTSYS;
 
   PDEBUG("Searching for entry with cur_off = %lu", cur_off);
-  entry = aesd_circular_buffer_find_entry_offset_for_fpos(
-      dev->buffer, cur_off, &entry_offset_byte_rtn);
 
-  if (entry == NULL) {
-    PDEBUG("Null entry! Exiting");
-    goto out;
-  }
+  while (true) {
+    entry = aesd_circular_buffer_find_entry_offset_for_fpos(
+        dev->buffer, cur_off, &entry_offset_byte_rtn);
 
-  PDEBUG("Found entry %s with entry_offset = %lu", entry->buffptr,
-         entry_offset_byte_rtn);
+    if (entry == NULL) {
+      PDEBUG("Null entry! Exiting");
+      goto out;
+    }
 
-  PDEBUG(" \
+    PDEBUG("Found entry %s with entry_offset = %lu", entry->buffptr,
+           entry_offset_byte_rtn);
+
+    PDEBUG(" \
   f_pos: %llu \n \
   count: %lu \n \
   entry->size: %lu \
   ",
-         *f_pos, count, entry->size);
+           *f_pos, count, entry->size);
 
-  if (count > entry->size)
-    count = entry->size;
+    if (count > entry->size)
+      count = entry->size;
 
-  PDEBUG(" \
+    PDEBUG(" \
   CHANGED \n \
   f_pos: %llu \n \
   count: %lu \n \
   entry->size: %lu \
   ",
-         *f_pos, count, entry->size);
+           *f_pos, count, entry->size);
 
-  if (copy_to_user(buf, entry->buffptr, count)) {
-    retval = -EFAULT;
-    goto out;
+    if (copy_to_user(buf, entry->buffptr + entry_offset_byte_rtn, count)) {
+      PDEBUG("Something went wrong...");
+      retval = -EFAULT;
+      goto out;
+    }
+
+    *f_pos += count;
+    retval += count;
+    cur_off += count;
   }
-
-  *f_pos += count;
-  retval = count;
 
 out:
   mutex_unlock(&dev->lock);
@@ -159,6 +192,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         memcpy((void *)new_entry->buffptr, dev->tmp_entry.buffptr, buf_size);
     new_entry->size = buf_size;
 
+    dev->size += new_entry->size;
+
     /* Reset tmp entry vars for new buf */
     kfree(dev->tmp_entry.buffptr);
     memset(&(aesd_device.tmp_entry), 0, sizeof(struct aesd_buffer_entry));
@@ -167,6 +202,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     /* If buffer is full ,free memory of last written element */
     if (dev->buffer->full) {
       PDEBUG("Buffer is full. Freeing memory");
+      dev->size -= dev->buffer->entry[dev->buffer->in_offs].size;
       kfree(dev->buffer->entry[dev->buffer->in_offs].buffptr);
       dev->buffer->entry[dev->buffer->in_offs].size = 0;
     }
@@ -182,11 +218,85 @@ out:
   mutex_unlock(&dev->lock);
   return retval;
 }
+
+long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
+
+  int retval = 0;
+  struct aesd_dev *dev = filp->private_data;
+  struct aesd_seekto param = *(struct aesd_seekto *)arg;
+  size_t cur_off = 0, entry_offset_byte_rtn = 0, i = 0;
+  struct aesd_buffer_entry *entry =
+      aesd_circular_buffer_find_entry_offset_for_fpos(dev->buffer, cur_off,
+                                                      &entry_offset_byte_rtn);
+
+  PDEBUG("cmd: %u - cmd_off: %u", param.write_cmd, param.write_cmd_offset);
+
+  /*
+   * extract the type and number bitfields, and don't decode
+   * wrong cmds: return ENOTTY (inappropriate ioctl) before access_ok()
+   */
+  if (_IOC_TYPE(cmd) != AESD_IOC_MAGIC)
+    return -ENOTTY;
+  if (_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)
+    return -ENOTTY;
+
+  PDEBUG("Checking cmd. It is: %u, and expected is: %lu", cmd,
+         AESDCHAR_IOCSEEKTO);
+
+  switch (cmd) {
+
+  case AESDCHAR_IOCSEEKTO:
+    if (mutex_lock_interruptible(&(dev->lock))) {
+      retval = -ERESTARTSYS;
+      goto out;
+    }
+
+    while (param.write_cmd && entry) {
+      PDEBUG("Iter: %lu", i);
+      entry = aesd_circular_buffer_find_entry_offset_for_fpos(
+          dev->buffer, cur_off, &entry_offset_byte_rtn);
+      if (entry == NULL) {
+        PDEBUG("No more entries available!!!");
+        retval = -EINVAL;
+        goto out;
+      }
+      PDEBUG("Entry is: %s", entry->buffptr);
+      --param.write_cmd;
+      ++i;
+      cur_off += entry->size;
+    }
+
+    break;
+
+  default: /* redundant, as cmd was checked against MAXNR */
+    retval = -ENOTTY;
+    goto out;
+  }
+
+  if (entry) {
+    if (param.write_cmd_offset > entry->size) {
+      PDEBUG("offset bigger than entry size!!!");
+      retval = -EINVAL;
+      goto out;
+    }
+
+    PDEBUG("Setting offset to: %lu", (cur_off + param.write_cmd_offset));
+
+    filp->f_pos = cur_off + param.write_cmd_offset;
+  }
+
+out:
+  mutex_unlock(&dev->lock);
+  return retval;
+}
+
 struct file_operations aesd_fops = {
     .owner = THIS_MODULE,
+    .open = aesd_open,
+    .llseek = aesd_llseek,
     .read = aesd_read,
     .write = aesd_write,
-    .open = aesd_open,
+    .unlocked_ioctl = aesd_ioctl,
     .release = aesd_release,
 };
 
@@ -239,6 +349,7 @@ int aesd_init_module(void) {
   /* Initialize device settings */
   memset(&(aesd_device.tmp_entry), 0, sizeof(struct aesd_buffer_entry));
   aesd_device.last_entry_size = 0;
+  aesd_device.size = 0;
 
   return result;
 }

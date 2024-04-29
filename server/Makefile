@@ -1,5 +1,6 @@
-IDIR=-Ilinked_list/
+IDIR=-Ilinked_list/ -I../aesd-char-driver
 OBJ = aesdsocket.o list.o
+
 
 ifdef CROSS_COMPILE
 	CC=${CROSS_COMPILE}gcc
@@ -9,14 +10,22 @@ ifndef LDFLAGS
 	LDFLAGS=-g -lpthread -lrt
 endif
 
+all:	aesdsocket test_ioctl
+
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< ${IDIR} $(LDFLAGS)
+
+test_ioctl.o: test_ioctl.c 
+	$(CC) -c -o $@ $< ${IDIR} $(LDFLAGS)
+
+test_ioctl: test_ioctl.o
+	$(CC) -o $@ $^ $(LDFLAGS)
 
 aesdsocket: $(OBJ)
 	$(CC) -o $@ $^ ${IDIR} $(LDFLAGS)
 
-all:	aesdsocket
+
 
 clean:
-	rm -f aesdsocket *.o
+	rm -f aesdsocket test_ioctl *.o
 

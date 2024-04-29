@@ -48,6 +48,8 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(
   uint8_t idx = buffer->out_offs;
 
   if (char_offset == 0) {
+    if (buffer->entry[idx].size == 0)
+      return NULL;
     *entry_offset_byte_rtn = 0;
     return &(buffer->entry[idx]);
   }

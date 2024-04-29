@@ -1,3 +1,4 @@
+#include <aesd_ioctl.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -35,6 +36,7 @@ pthread_mutex_t mux;
 List l = NULL;
 struct itimerspec ts;
 timer_t timer_tid;
+struct aesd_seekto ioctl_params = {0};
 
 void WaitThread() {
   ListNode *tmp = l;
@@ -126,45 +128,71 @@ void *handle_connection(void *arg) {
   pthread_t tid = (*t_data->tid);
   ssize_t nread;
   char buf[BUF_SIZE];
-  bool last_char = false;
+  bool last_char = false, seek_set;
 
   for (;;) {
     nread = recv(t_data->cfd, buf, BUF_SIZE, 0);
 
     if (nread > 0) {
       pthread_mutex_lock(&mux);
-      f_length += nread;
+      seek_set = false;
 
-      content = realloc(
-          content, f_length + 1); /* Allocating 1 B more for terminating char */
-      if (content == NULL) {
-        pthread_mutex_unlock(&mux);
-        syslog(LOG_ERR,
-               "Error while reallocating new memory. Errno message is: \n%s\n",
-               strerror(errno));
-        exit(-1);
-      }
+      if (sscanf(buf, "AESDCHAR_IOCSEEKTO:%u,%u\n", &ioctl_params.write_cmd,
+                 &ioctl_params.write_cmd_offset) == 2) {
+        int ret = ioctl(out_fd, AESDCHAR_IOCSEEKTO, &ioctl_params);
+        syslog(LOG_DEBUG, "ioctl returned: %d\n", ret);
 
-      for (size_t i = prev_length, j = 0; j < nread; i++, j++) {
-        content[i] = buf[j];
-        last_char = (buf[j] == '\n');
-      }
+        nread = 0;
 
-      content[f_length] = 0;
-      prev_length = f_length;
+        if (ret == 0)
+          seek_set = true;
+        last_char = true;
+      } else {
+        f_length += nread;
 
-      size_t written_chars = write(out_fd, buf, nread);
+        content = realloc(content,
+                          f_length +
+                              1); /* Allocating 1 B more for terminating char */
+        if (content == NULL) {
+          pthread_mutex_unlock(&mux);
+          syslog(
+              LOG_ERR,
+              "Error while reallocating new memory. Errno message is: \n%s\n",
+              strerror(errno));
+          exit(-1);
+        }
 
-      if (written_chars != nread) {
-        pthread_mutex_unlock(&mux);
-        syslog(LOG_ERR, "Error while writing to file. Errno message is: \n%s\n",
-               strerror(errno));
-        exit(-1);
+        for (size_t i = prev_length, j = 0; j < nread; i++, j++) {
+          last_char = (buf[j] == '\n');
+        }
+
+        prev_length = f_length;
+
+        size_t written_chars = write(out_fd, buf, nread);
+
+        if (written_chars != nread) {
+          pthread_mutex_unlock(&mux);
+          syslog(LOG_ERR,
+                 "Error while writing to file. Errno message is: \n%s\n",
+                 strerror(errno));
+          exit(-1);
+        }
       }
 
       /* Return full content to client */
       if (last_char) {
-        if (send(t_data->cfd, content, f_length, 0) != f_length) {
+        uint32_t cur_pos = 0;
+
+        if (!seek_set)
+          lseek(out_fd, 0, SEEK_SET);
+        else
+          cur_pos = lseek(out_fd, 0, SEEK_CUR);
+
+        read(out_fd, content, (f_length - cur_pos));
+        content[f_length] = 0;
+
+        if (send(t_data->cfd, content, (f_length - cur_pos), 0) !=
+            (f_length - cur_pos)) {
           pthread_mutex_unlock(&mux);
           syslog(LOG_ERR,
                  "Error while writing back to socket. Errno message is: \n%s\n",
@@ -246,7 +274,7 @@ void execute_server() {
 
   syslog(LOG_DEBUG, "Opened file %s\n", OUT_FILENAME);
 
-  out_fd = open(OUT_FILENAME, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  out_fd = open(OUT_FILENAME, O_RDWR | O_CREAT | O_TRUNC, 0644);
   if (out_fd == -1) {
     syslog(LOG_ERR, "Error while opening out file. Errno message is: \n%s\n",
            strerror(errno));

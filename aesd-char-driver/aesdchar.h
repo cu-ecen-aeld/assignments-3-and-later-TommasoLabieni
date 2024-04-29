@@ -9,6 +9,7 @@
 #define AESD_CHAR_DRIVER_AESDCHAR_H_
 
 #include "aesd-circular-buffer.h"
+#include "aesd_ioctl.h"
 #include <linux/cdev.h>
 #include <linux/mutex.h>
 
@@ -30,6 +31,7 @@
 struct aesd_dev {
   struct aesd_buffer_entry tmp_entry;
   ssize_t last_entry_size;
+  size_t size;
   struct aesd_circular_buffer *buffer; /* circular buffer */
   struct mutex lock;                   /* mutual exclusion semaphore     */
   struct cdev cdev;                    /* Char device structure      */
