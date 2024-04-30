@@ -30,7 +30,7 @@ struct aesd_dev aesd_device;
 
 int aesd_open(struct inode *inode, struct file *filp) {
   struct aesd_dev *dev; /* device information */
-  PDEBUG("open start");
+  PDEBUG("open called");
 
   dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
   filp->private_data = dev; /* for other methods */
@@ -39,7 +39,7 @@ int aesd_open(struct inode *inode, struct file *filp) {
 }
 
 int aesd_release(struct inode *inode, struct file *filp) {
-  PDEBUG("release");
+  PDEBUG("release called");
 
   return 0;
 }

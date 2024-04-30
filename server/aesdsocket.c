@@ -28,7 +28,7 @@
 #endif
 #define BUF_SIZE 128
 
-int out_fd;
+int out_fd = -1;
 char s[4], *content = NULL;
 int sock_fd;
 ssize_t f_length = 0, prev_length = 0;
@@ -272,17 +272,6 @@ void execute_server() {
     exit(-1);
   }
 
-  syslog(LOG_DEBUG, "Opened file %s\n", OUT_FILENAME);
-
-  out_fd = open(OUT_FILENAME, O_RDWR | O_CREAT | O_TRUNC, 0644);
-  if (out_fd == -1) {
-    syslog(LOG_ERR, "Error while opening out file. Errno message is: \n%s\n",
-           strerror(errno));
-    closelog();
-    close(sock_fd);
-    exit(-1);
-  }
-
   struct sigevent sev;
 
   sev.sigev_notify = SIGEV_THREAD;             /* Notify via thread */
@@ -330,6 +319,20 @@ void execute_server() {
     inet_ntop(AF_INET, &(sin->sin_addr), s, peer_addr_size);
 
     syslog(LOG_DEBUG, "Accepted connection from %s\n", s);
+
+    if (out_fd == -1) {
+      out_fd = open(OUT_FILENAME, O_RDWR | O_CREAT | O_TRUNC, 0644);
+      if (out_fd == -1) {
+        syslog(LOG_ERR,
+               "Error while opening out file. Errno message is: \n%s\n",
+               strerror(errno));
+        closelog();
+        close(sock_fd);
+        exit(-1);
+      }
+
+      syslog(LOG_DEBUG, "Opened file %s\n", OUT_FILENAME);
+    }
 
     ThreadData *t_data = (ThreadData *)malloc(sizeof(ThreadData));
     if (t_data == NULL) {
