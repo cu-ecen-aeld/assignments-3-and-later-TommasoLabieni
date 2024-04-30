@@ -90,7 +90,10 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 
   PDEBUG("Searching for entry with cur_off = %lu", cur_off);
 
-  while (true) {
+  if (count > dev->size)
+    count = dev->size;
+
+  while (count) {
     entry = aesd_circular_buffer_find_entry_offset_for_fpos(
         dev->buffer, cur_off, &entry_offset_byte_rtn);
 
@@ -109,26 +112,17 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
   ",
            *f_pos, count, entry->size);
 
-    if (count > entry->size)
-      count = entry->size;
-
-    PDEBUG(" \
-  CHANGED \n \
-  f_pos: %llu \n \
-  count: %lu \n \
-  entry->size: %lu \
-  ",
-           *f_pos, count, entry->size);
-
-    if (copy_to_user(buf, entry->buffptr + entry_offset_byte_rtn, count)) {
+    if (copy_to_user(buf + retval, entry->buffptr + entry_offset_byte_rtn,
+                     entry->size - entry_offset_byte_rtn)) {
       PDEBUG("Something went wrong...");
       retval = -EFAULT;
       goto out;
     }
 
-    *f_pos += count;
-    retval += count;
-    cur_off += count;
+    *f_pos += entry->size - entry_offset_byte_rtn;
+    retval += entry->size - entry_offset_byte_rtn;
+    cur_off += entry->size - entry_offset_byte_rtn;
+    count -= entry->size - entry_offset_byte_rtn;
   }
 
 out:
